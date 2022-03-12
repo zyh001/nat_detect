@@ -255,7 +255,7 @@ while :;do
                         fi
                         echo -e "${BLUE}[INFO]${END} ${PURPLE}存在用户IP：$(echo ${line} | awk '{print $2}'), MAC：$(echo ${line} | awk '{print $3}')共享上网！${COLOR}权重: $(echo ${line} | awk '{print $1}')${END}${END}"
                     done < /tmp/check_nat.tmp1
-                    rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp /tmp/check_nat.tmp2
+                    rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp /tmp/check_nat.tmp2 /tmp/goflow2.log
                     echo -e "${BLUE}[INFO]${END} ${GREEN}退出！${END}"
                 fi
             fi
