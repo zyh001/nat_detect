@@ -163,6 +163,7 @@ function check_ttl(){
             check_even ${IPTTL}
             if [[ $? != 0 ]]; then
                 echo "${SrcAddr} ${SrcMac}" >> /tmp/check_nat.tmp
+                echo "${SrcAddr} ${SrcMac} ${IPTTL}" >> /tmp/check_nat.tmp2
             fi
         fi
     done < `echo ${sflowfile}`
@@ -176,7 +177,7 @@ function StopThis(){
     fi
     rm -f /tmp/check_nat.tmp
     rm -f /tmp/goflow2.log
-    rm -f /tmp/check_nat.tmp1
+    rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp2
     echo -e "${YELLOW}[WARNING]${END} ${YELLOW}退出${END}"
     exit 0
 }
@@ -199,7 +200,7 @@ if [[ -f /tmp/check_nat.tmp ]]; then
     rm -f /tmp/check_nat.tmp
 fi
 if [[ -f /tmp/check_nat.tmp1 ]]; then
-    rm -f /tmp/check_nat.tmp1
+    rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp2
 fi
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -246,10 +247,15 @@ while :;do
                 if [[ -f /tmp/check_nat.tmp ]]; then
                     cat /tmp/check_nat.tmp | sort | uniq -c | sort -nr > /tmp/check_nat.tmp1
                     while read line
-                    do
-                        echo -e "${BLUE}[INFO]${END} ${PURPLE}存在用户IP：$(echo ${line} | awk '{print $2}'), MAC：$(echo ${line} | awk '{print $3}')共享上网！${CYAN}权重: $(echo ${line} | awk '{print $1}')${END}${END}"
+                    do 
+                        if [[ `cat /tmp/check_nat.tmp2 | sort | uniq | grep $(echo ${line} | awk '{print $2}') | wc -l` != 1 ]]; then
+                            COLOR="${RED}"
+                        else
+                            COLOR="${CYAN}"
+                        fi
+                        echo -e "${BLUE}[INFO]${END} ${PURPLE}存在用户IP：$(echo ${line} | awk '{print $2}'), MAC：$(echo ${line} | awk '{print $3}')共享上网！${COLOR}权重: $(echo ${line} | awk '{print $1}')${END}${END}"
                     done < /tmp/check_nat.tmp1
-                    rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp
+                    rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp /tmp/check_nat.tmp2
                     echo -e "${BLUE}[INFO]${END} ${GREEN}退出！${END}"
                 fi
             fi
