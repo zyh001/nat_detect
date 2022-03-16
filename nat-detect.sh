@@ -13,7 +13,7 @@ END='\033[0m'
 GOFLOW="$(dirname `readlink -f $0`)/goflow"  # goflow脚本路径（https://github.com/netsampler/goflow2）
 JQ="$(dirname `readlink -f $0`)/gojq" # gojq脚本路径（https://github.com/itchyny/gojq）
 ## 检查是否为root用户
-[ $(id -u) != "0" ] && { echo -e "${RED}Error: You must be root to run this script${END}"; exit 1; }
+[ $(id -u) != "0" ] && { echo -e "${RED}[Error] 你必须使用root执行该脚本${END}"; exit 1; }
 ## 异常退出检测
 trap 'StopThis 2>/dev/null && exit 0' 2 15
 ## 检测系统
@@ -41,7 +41,7 @@ elif [ -n "$(grep Ubuntu /etc/issue)" -o "$(lsb_release -is 2>/dev/null)" == 'Ub
 elif [ ! -z "$(grep 'Arch Linux' /etc/issue)" ];then
     OS=Arch
 else
-    echo -e "${RED}Does not support this OS, Please contact the author! ${END}"
+    echo -e "${RED}[ERROR] 不受支持的操作系统！${END}"
     kill -9 $$
 fi
 ## 检测screen
@@ -168,6 +168,61 @@ function check_ttl(){
         fi
     done < `echo ${sflowfile}`
 }
+## 放通防火墙
+function allow_fw(){
+    local protocol=${1}
+    local port=${2}
+    if command -v iptables >/dev/null 2>&1;then
+        systemctl status iptables >/dev/null 2>&1
+        if [[ $? == 0 ]];then
+            echo -e "${BLUE}[INFO]${END} ${GREEN}自动允许${END} ${port}/${protocol} ${GREEN}端口${END}"
+            echo -e "\033[32m[+]\033[0m iptables -A INPUT -p ${protocol} --dport ${port} -j ACCEPT"
+            iptables -A INPUT -p ${protocol} --dport ${port} -j ACCEPT >/dev/null 2>&1
+            iptables_enable="yes"
+        fi
+    fi
+    if command -v firewall-cmd >/dev/null 2>&1;then
+        systemctl status firewalld >/dev/null 2>&1
+        if [[ $? == 0 ]];then
+            if [[ "${iptables_enable}" != "yes" ]]; then
+                echo -e "${BLUE}[INFO]${END} ${GREEN}自动允许${END} ${port}/${protocol} ${GREEN}端口${END}"
+            fi
+            echo -e "\033[32m[+]\033[0m firewall-cmd --zone=public --add-port=${port}/${protocol} --permanent"
+            firewall-cmd --zone=public --add-port=${port}/${protocol} --permanent >/dev/null 2>&1
+            firewall_enable="yes"
+        fi
+    fi
+    if command -v ufw >/dev/null 2>&1;then
+        systemctl status ufw >/dev/null 2>&1
+        if [[ $? == 0 ]];then
+            if [[ "${iptables_enable}" != "yes" || "${firewall_enable}" != "yes" ]]; then
+                echo -e "${BLUE}[INFO]${END} ${GREEN}自动允许${END} ${port}/${protocol} ${GREEN}端口${END}"
+            fi
+            echo -e "\033[32m[+]\033[0m ufw allow ${port}/${protocol}"
+            ufw allow ${port}/${protocol} >/dev/null 2>&1
+            ufw_enable="yes"
+        fi
+    fi
+}
+## 关闭防火墙
+function deny_fw(){
+    local protocol=${1}
+    local port=${2}
+    if [[ "${ufw_enable}" == "yes" || "${firewall_enable}" == "yes" || "${iptables_enable}" == "yes" ]]; then
+        echo -e "${BLUE}[INFO]${END} ${RED}自动关闭${END} ${port}/${protocol} ${RED}端口${END}"
+    if [[ ${ufw_enable} == yes ]]; then
+        echo -e "\033[32m[+]\033[0m ufw delete allow ${port}/${protocol}"
+        ufw delete allow ${port}/${protocol} >/dev/null 2>&1
+    fi
+    if [[ ${firewall_enable} == yes ]]; then
+        echo -e "\033[32m[+]\033[0m firewall-cmd --zone=public --remove-port=${port}/${protocol}"
+        firewall-cmd --zone=public --remove-port=${port}/${protocol} >/dev/null 2>&1
+    fi
+    if [[ ${iptables_enable} == yes ]]; then
+        echo -e "\033[32m[+]\033[0m iptables -D INPUT -p ${protocol} --dport ${port} -j ACCEPT"
+        iptables -D INPUT -p ${protocol} --dport ${port} -j ACCEPT >/dev/null 2>&1
+    fi
+}
 ## 停止函数
 function StopThis(){
     echo -e "${YELLOW}[WARNING]${END} ${YELLOW}操作被中断，开始进行清理工作！${END}"
@@ -178,6 +233,7 @@ function StopThis(){
     rm -f /tmp/check_nat.tmp
     rm -f /tmp/goflow2.log
     rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp2
+    deny_fw "udp" "6344"
     echo -e "${YELLOW}[WARNING]${END} ${YELLOW}退出${END}"
     exit 0
 }
@@ -219,6 +275,7 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+allow_fw "udp" "6344"
 while :;do
     unset isSub
     if [[ -f /tmp/goflow2.log ]]; then
@@ -256,6 +313,7 @@ while :;do
                         echo -e "${BLUE}[INFO]${END} ${PURPLE}存在用户IP：$(echo ${line} | awk '{print $2}'), MAC：$(echo ${line} | awk '{print $3}')共享上网！${COLOR}权重: $(echo ${line} | awk '{print $1}')${END}${END}"
                     done < /tmp/check_nat.tmp1
                     rm -f /tmp/check_nat.tmp1 /tmp/check_nat.tmp /tmp/check_nat.tmp2 /tmp/goflow2.log
+                    deny_fw "udp" "6344"
                     echo -e "${BLUE}[INFO]${END} ${GREEN}退出！${END}"
                 fi
             fi
