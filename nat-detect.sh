@@ -14,6 +14,8 @@ GOFLOW="$(dirname `readlink -f $0`)/goflow"  # goflow脚本路径（https://gith
 JQ="$(dirname `readlink -f $0`)/gojq" # gojq脚本路径（https://github.com/itchyny/gojq）
 ## 检查是否为root用户
 [ $(id -u) != "0" ] && { echo -e "${RED}[Error] 你必须使用root执行该脚本${END}"; exit 1; }
+## 脚本md5
+script_md5="$(md5sum `readlink -f $0` | awk '{print $1}' | head -c 8)"
 ## 异常退出检测
 trap 'StopThis 2>/dev/null && exit 0' 2 15
 ## 检测系统
@@ -227,7 +229,7 @@ function deny_fw(){
 function StopThis(){
     echo -e "${YELLOW}[WARNING]${END} ${YELLOW}操作被中断，开始进行清理工作！${END}"
     if [[ ! -z $(screen -ls | grep goflow2) ]]; then
-        screen -S goflow2 -X quit
+        screen -S ${script_md5} -X quit
         killall goflow
     fi
     rm -f /tmp/check_nat.tmp
@@ -281,13 +283,13 @@ while :;do
     if [[ -f /tmp/goflow2.log ]]; then
         rm -f /tmp/goflow2.log
     fi
-    screen -dmS goflow2 ${GOFLOW} -metrics.addr ":6344" -transport.file /tmp/goflow2.log
+    screen -dmS ${script_md5} ${GOFLOW} -metrics.addr ":6344" -transport.file /tmp/goflow2.log
     if [[ ${isRunning} != "yes" ]]; then
         echo -e "${BLUE}[INFO]${END} ${GREEN}开始采集数据！${END}"
         echo -e "${BLUE}[INFO]${END} ${GREEN}循环圈数: ${num}${END}"
     fi
     sleep ${wait_time}s
-    screen -S goflow2 -X quit
+    screen -S ${script_md5} -X quit
     if [[ `ps -ef | grep goflow | grep -v grep | wc -l` -eq 1 ]]; then
         killall goflow
     fi
